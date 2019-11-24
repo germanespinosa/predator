@@ -25,7 +25,7 @@ GUart GComm;
 ISR(UART_RX_INT_VECT)
 {
   _rx_buffer[UART_INC(_rx_offset)] = UART_IO_BYTE;
-  if (_rx_next==_rx_offset){
+  if (_rx_next == _rx_offset){
     _rx_lost++;
     UART_INC(_rx_next);
   }
@@ -52,10 +52,15 @@ void GUart::begin (uint16_t baud_rate){
   _rx_length = 0;
 }
 
+#define CHECK_BYTE byte = UART_GETBYTE;if (byte==255){ _rx_length = 0; return 0; }
+
 uint16_t GUart::read(void *dest, uint16_t max_size){
+  uint8_t byte;
   if ( !_rx_length && UART_RX_PENDING >= 2 ) {
-    uint16_t l = UART_GETBYTE;
-    uint16_t h = UART_GETBYTE;
+    CHECK_BYTE
+    uint16_t l = byte;
+    CHECK_BYTE
+    uint16_t h = byte;
       _rx_length = (h << 8) + l;
   }
   if( _rx_length && UART_RX_PENDING > _rx_length )
@@ -63,13 +68,15 @@ uint16_t GUart::read(void *dest, uint16_t max_size){
     uint8_t *dest_c = (uint8_t *) dest;
     uint8_t check_sum = 0;
     for ( int index = 0 ; index < _rx_length ; index++ ){
-      uint8_t byte_ = UART_GETBYTE;
+      CHECK_BYTE
+      uint8_t byte_ = byte;
       if (index <= max_size) dest_c[index] = byte_;
       check_sum = check_sum ^ byte_;
     }
     uint16_t result = _rx_length;
     _rx_length = 0;
-    return check_sum == UART_GETBYTE ? result : 0;
+    CHECK_BYTE
+    return check_sum == byte ? result : 0;
   }
   return 0;
 }
@@ -78,10 +85,22 @@ void GUart::write(const void *data, uint16_t size){
   uint8_t* buff=(uint8_t*)data;
   uint8_t cs=0;
   uint8_t* size_b=(uint8_t*) &size;
+  UART_WRITEBYTE(255);
   UART_WRITEBYTE(*size_b++);
   UART_WRITEBYTE(*size_b);
   for ( uint8_t index = 0 ; index < size ; index++ ){
-    UART_WRITEBYTE(buff[index]);
+      switch(buff[index]){
+          case 255:
+              UART_WRITEBYTE(127);
+              UART_WRITEBYTE(128);
+              break;
+          case 127:
+              UART_WRITEBYTE(127);
+              UART_WRITEBYTE(0);
+              break;
+          default:
+              UART_WRITEBYTE(buff[index]);
+      }
     cs=cs^buff[index];
   }
   UART_WRITEBYTE(cs);
