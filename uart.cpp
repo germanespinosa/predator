@@ -67,11 +67,16 @@ uint16_t GUart::read(void *dest, uint16_t max_size){
   {
     uint8_t *dest_c = (uint8_t *) dest;
     uint8_t check_sum = 0;
-    for ( int index = 0 ; index < _rx_length ; index++ ){
+    int x = 0;
+    for ( int index = 0 ; index + x < _rx_length ; index++ ){
       CHECK_BYTE
-      uint8_t byte_ = byte;
-      if (index <= max_size) dest_c[index] = byte_;
-      check_sum = check_sum ^ byte_;
+      if (byte==127) {
+        CHECK_BYTE
+        byte += 127;
+        x++;
+      }
+      if (index <= max_size) dest_c[index] = byte;
+      check_sum = check_sum ^ byte;
     }
     uint16_t result = _rx_length;
     _rx_length = 0;
@@ -85,6 +90,9 @@ void GUart::write(const void *data, uint16_t size){
   uint8_t* buff=(uint8_t*)data;
   uint8_t cs=0;
   uint8_t* size_b=(uint8_t*) &size;
+  for (uint8_t index = 0; index < size; index++) {
+    if (buff[index]==255 || buff[index]==127) size ++;
+  }
   UART_WRITEBYTE(255);
   UART_WRITEBYTE(*size_b++);
   UART_WRITEBYTE(*size_b);
